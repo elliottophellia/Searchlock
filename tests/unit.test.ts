@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { parseSuggest } from "../src/brave.ts";
 import { htmlToText, parseResultPage, assertPublicUrl } from "../src/ddg.ts";
 import { RefLinks, SlidingWindow, TokenBucket, TtlCache, isRefToken } from "../src/limits.ts";
 import { canonicalUrl, collapseSpace, stripTags } from "../src/support.ts";
@@ -65,6 +66,17 @@ describe("limiters", () => {
     const bucket = new TokenBucket(60);
     await bucket.take();
     expect(bucket.idle).toBe(false);
+  });
+});
+
+describe("brave parsing", () => {
+  test("parseSuggest handles tuple and object forms", () => {
+    expect(parseSuggest(JSON.stringify(["q", ["one", "two"]]))).toEqual(["one", "two"]);
+    expect(
+      parseSuggest(JSON.stringify({ suggestions: [{ q: "three" }, { text: "four" }] })),
+    ).toEqual(["three", "four"]);
+    expect(parseSuggest(JSON.stringify({ unexpected: 1 }))).toEqual([]);
+    expect(parseSuggest("not json")).toEqual([]);
   });
 });
 
