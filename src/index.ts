@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { VERSION, runHttp, runStdio } from "./server.ts";
 
 function usage(code = 2): never {
