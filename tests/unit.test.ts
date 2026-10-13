@@ -1,6 +1,23 @@
 import { describe, expect, test } from "bun:test";
+import { htmlToText, parseResultPage, assertPublicUrl } from "../src/ddg.ts";
 import { RefLinks, SlidingWindow, TokenBucket, TtlCache, isRefToken } from "../src/limits.ts";
 import { canonicalUrl, collapseSpace, stripTags } from "../src/support.ts";
+
+const DDG_HTML = `
+<html><body>
+<div class="result">
+  <h2 class="result__title"><a href="https://example.com/a">Example A</a></h2>
+  <p class="result__snippet">Snippet A here.</p>
+</div>
+<div class="result">
+  <h2 class="result__title"><a href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fb&amp;rut=x">Example B</a></h2>
+  <p class="result__snippet">Snippet B here.</p>
+</div>
+<div class="result">
+  <h2 class="result__title"><a href="https://example.com/y.js?v=1">Ad result</a></h2>
+  <p class="result__snippet">Filtered.</p>
+</div>
+</body></html>`;
 
 describe("support", () => {
   test("canonicalUrl lowercases host and drops fragments", () => {
@@ -48,6 +65,27 @@ describe("limiters", () => {
     const bucket = new TokenBucket(60);
     await bucket.take();
     expect(bucket.idle).toBe(false);
+  });
+});
+
+describe("ddg parsing", () => {
+  test("parseResultPage extracts, unwraps, and filters ads", () => {
+    const hits = parseResultPage(DDG_HTML, 10);
+    expect(hits.map((h) => h.title)).toEqual(["Example A", "Example B"]);
+    expect(hits[1]!.link).toBe("https://example.com/b");
+    expect(hits.every((h) => !h.link.includes("y.js"))).toBe(true);
+  });
+  test("htmlToText modes", () => {
+    const html =
+      "<html><body><nav>menu</nav><article><h1>Head</h1><p>Body text.</p></article></body></html>";
+    expect(htmlToText(html, "text")).toContain("Body text.");
+    expect(htmlToText(html, "main")).not.toContain("menu");
+    expect(htmlToText(html, "markdown")).toContain("# Head");
+  });
+  test("assertPublicUrl refuses local targets", async () => {
+    await expect(assertPublicUrl("http://127.0.0.1/")).rejects.toThrow();
+    await expect(assertPublicUrl("http://localhost/")).rejects.toThrow();
+    await expect(assertPublicUrl("ftp://example.com/")).rejects.toThrow();
   });
 });
 
